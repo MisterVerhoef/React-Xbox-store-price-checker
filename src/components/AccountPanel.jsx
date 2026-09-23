@@ -3,6 +3,7 @@ import Button from './Button'
 import Card from './Card'
 import { useAuth } from '../context/AuthContext'
 
+/** Show browser-stored account access, favorites, and saved price alerts. */
 export default function AccountPanel({ onSelectFavorite }) {
   const { user, favorites, alerts, login, register, logout, removeAlert } = useAuth()
   const [mode, setMode] = useState('login')
@@ -11,6 +12,7 @@ export default function AccountPanel({ onSelectFavorite }) {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
 
+  /** Submit credentials and display authentication or validation failures in the panel. */
   async function submit(event) {
     event.preventDefault()
     setError('')

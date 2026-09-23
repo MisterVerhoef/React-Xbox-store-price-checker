@@ -3,6 +3,7 @@ import useLocalStorage from '../hooks/useLocalStorage'
 
 const AuthContext = createContext(null)
 
+/** Provide browser-stored account, favorites, and price alerts to descendants. */
 export function AuthProvider({ children }) {
   const [user, setUser] = useLocalStorage('xbox_auth_user', null)
   const [accounts, setAccounts] = useLocalStorage('xbox_accounts', {})
@@ -13,6 +14,7 @@ export function AuthProvider({ children }) {
     const username = user?.username
     const favorites = username ? favoritesByUser[username] || [] : []
     const alerts = username ? alertsByUser[username] || [] : []
+    /** Reject changes to saved items when no account is signed in. */
     const requireUser = () => {
       if (!username) throw new Error('Log in to save favorites and price alerts.')
     }
@@ -21,6 +23,10 @@ export function AuthProvider({ children }) {
       user,
       favorites,
       alerts,
+      /**
+       * Sign in using a case-insensitive username and return account details without the password.
+       * @throws {Error} When the username or password does not match a saved account.
+       */
       async login(usernameToFind, password) {
         const account = accounts[usernameToFind.trim().toLowerCase()]
         if (!account || account.password !== password) throw new Error('Invalid username or password.')
@@ -28,6 +34,10 @@ export function AuthProvider({ children }) {
         setUser(safeUser)
         return safeUser
       },
+      /**
+       * Save a new account and sign in with a lowercase username.
+       * @throws {Error} For invalid or taken usernames or passwords shorter than six characters.
+       */
       async register(usernameToCreate, password, email) {
         const normalizedUsername = usernameToCreate.trim().toLowerCase()
         if (!/^[a-z0-9_-]{3,24}$/.test(normalizedUsername)) {
@@ -41,12 +51,18 @@ export function AuthProvider({ children }) {
         setUser(safeUser)
         return safeUser
       },
+      /** Sign out without removing the account or its saved items. */
       logout() {
         setUser(null)
       },
+      /** Check whether the current account saved the given product ID. */
       isFavorite(gameId) {
         return favorites.some((favorite) => favorite.id === gameId)
       },
+      /**
+       * Add or remove a game from the current account's favorites by product ID.
+       * @throws {Error} When no account is signed in.
+       */
       toggleFavorite(game) {
         requireUser()
         setFavoritesByUser((current) => {
@@ -57,6 +73,11 @@ export function AuthProvider({ children }) {
           return { ...current, [username]: next }
         })
       },
+      /**
+       * Save an alert for the current account, replacing any alert for the same game ID.
+       * A new ID is assigned even when replacing an existing alert.
+       * @throws {Error} When no account is signed in.
+       */
       saveAlert(alert) {
         requireUser()
         setAlertsByUser((current) => {
@@ -65,6 +86,10 @@ export function AuthProvider({ children }) {
           return { ...current, [username]: [...withoutGame, { ...alert, id: crypto.randomUUID() }] }
         })
       },
+      /**
+       * Remove an alert by ID from the current account; missing IDs leave the list unchanged.
+       * @throws {Error} When no account is signed in.
+       */
       removeAlert(alertId) {
         requireUser()
         setAlertsByUser((current) => ({
@@ -78,6 +103,7 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>
 }
 
+/** Access the account context, or null when rendered outside AuthProvider. */
 export function useAuth() {
   return useContext(AuthContext)
 }

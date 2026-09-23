@@ -16,6 +16,7 @@ function discountPercent(price) {
   return Math.round((1 - price.listPrice / price.msrp) * 100)
 }
 
+/** Show catalog search, regional price comparisons, and locally saved account items. */
 export default function App() {
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState([])
@@ -72,6 +73,7 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [query])
 
+  /** Load regional prices for a match, then search for DLC using its title. */
   async function chooseGame(hit) {
     setSelected(hit)
     setHits([])
@@ -118,6 +120,7 @@ export default function App() {
   const availableCount = rows.filter((row) => row.available).length
   const selectedAlert = selected && alerts.find((alert) => alert.gameId === selected.id)
 
+  /** Save a positive threshold in the display currency, or open the account panel if signed out. */
   function saveSelectedAlert(event) {
     event.preventDefault()
     if (!user) {

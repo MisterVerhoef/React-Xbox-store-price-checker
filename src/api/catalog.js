@@ -64,6 +64,7 @@ export function summarizeProduct(product) {
   }
 }
 
+/** Return nonempty spelling, numeral, and common game-title abbreviation variants of a query. */
 function searchVariants(query) {
   const trimmed = query.trim().replace(/\s+/g, ' ')
   const variants = new Set([trimmed])
@@ -85,6 +86,13 @@ function searchVariants(query) {
   return [...variants].filter(Boolean)
 }
 
+/**
+ * Search the US Xbox catalog for one query variant.
+ * @param {string} productFamilyNames Comma-separated catalog families to include.
+ * @param {number} topProducts Maximum products requested for this variant.
+ * @returns {Promise<object[]>} Catalog matches in the order returned by the service.
+ * @throws {Error} When the request fails, its response is invalid, or HTTP status is not OK.
+ */
 async function searchCatalog(query, productFamilyNames, topProducts) {
   const params = new URLSearchParams({
     languages: 'en-US',
@@ -111,6 +119,7 @@ async function searchCatalog(query, productFamilyNames, topProducts) {
   return products
 }
 
+/** Keep distinct product IDs and rank matches by title-term overlap, then title. */
 function rankProducts(products, query) {
   const terms = query.toLowerCase().replace(/[®™]/g, '').split(/\s+/).filter(Boolean)
   const seen = new Set()
@@ -125,6 +134,11 @@ function rankProducts(products, query) {
     })
 }
 
+/**
+ * Combine and rank successful catalog searches for alternate spellings of a query.
+ * Failed variants are ignored when at least one search succeeds, even if it returns no matches.
+ * @throws {Error} When every variant's request or response fails.
+ */
 async function searchWithVariants(query, productFamilyNames, topProducts) {
   const results = await Promise.allSettled(
     searchVariants(query).map((variant) => searchCatalog(variant, productFamilyNames, topProducts)),
@@ -136,10 +150,20 @@ async function searchWithVariants(query, productFamilyNames, topProducts) {
   return rankProducts(successful.flatMap((result) => result.value), query)
 }
 
+/**
+ * Search games, DLC, and apps by title, including alternate spellings.
+ * @returns {Promise<object[]>} Distinct catalog matches ranked by title-term overlap.
+ * @throws {Error} When all catalog query variants fail.
+ */
 export async function searchGames(query) {
   return searchWithVariants(query, 'Games,DLC,Apps', 20)
 }
 
+/**
+ * Search DLC by a product title; results are title matches, not verified add-ons for that product.
+ * @returns {Promise<object[]>} Distinct catalog matches ranked by title-term overlap.
+ * @throws {Error} When all catalog query variants fail.
+ */
 export async function searchRelatedDlc(title) {
   return searchWithVariants(title, 'DLC', 50)
 }
