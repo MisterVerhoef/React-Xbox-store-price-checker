@@ -1,5 +1,16 @@
 import { MARKETS } from '../data/markets'
 
+const ROMAN_NUMERALS = {
+  2: 'II',
+  3: 'III',
+  4: 'IV',
+  5: 'V',
+  6: 'VI',
+  7: 'VII',
+  8: 'VIII',
+  9: 'IX',
+}
+
 function imageUrl(uri) {
   if (!uri) return ''
   return uri.startsWith('http') ? uri : `https:${uri}`
@@ -53,14 +64,35 @@ export function summarizeProduct(product) {
   }
 }
 
-export async function searchGames(query) {
+function searchVariants(query) {
+  const trimmed = query.trim().replace(/\s+/g, ' ')
+  const variants = new Set([trimmed])
+  const numericVariant = trimmed.replace(/\b([2-9])\b/g, (_, number) => ROMAN_NUMERALS[number])
+  const romanVariant = trimmed.replace(/\b(II|III|IV|V|VI|VII|VIII|IX)\b/gi, (numeral) => {
+    const value = Object.entries(ROMAN_NUMERALS).find(([, roman]) => roman.toLowerCase() === numeral.toLowerCase())
+    return value ? value[0] : numeral
+  })
+  variants.add(numericVariant)
+  variants.add(romanVariant)
+
+  const shorthand = trimmed.toLowerCase()
+    .replace(/\bcod\b/g, 'call of duty')
+    .replace(/\bbo([2-9])\b/g, (_, number) => `black ops ${ROMAN_NUMERALS[number]}`)
+    .replace(/\bmw([2-9])\b/g, (_, number) => `modern warfare ${ROMAN_NUMERALS[number]}`)
+    .replace(/\bgta\s*([2-9])\b/g, (_, number) => `grand theft auto ${ROMAN_NUMERALS[number]}`)
+  variants.add(shorthand)
+
+  return [...variants].filter(Boolean)
+}
+
+async function searchCatalog(query, productFamilyNames, topProducts) {
   const params = new URLSearchParams({
     languages: 'en-US',
     market: 'US',
     platformdependencyname: 'windows.xbox',
-    productFamilyNames: 'Games,Apps',
+    productFamilyNames,
     query,
-    topProducts: '20',
+    topProducts: String(topProducts),
   })
   const res = await fetch(`/catalog/v7.0/productFamilies/autosuggest?${params}`)
   if (!res.ok) {
@@ -76,12 +108,40 @@ export async function searchGames(query) {
       icon: product.Icon ? imageUrl(product.Icon) : '',
     })),
   )
+  return products
+}
+
+function rankProducts(products, query) {
+  const terms = query.toLowerCase().replace(/[®™]/g, '').split(/\s+/).filter(Boolean)
   const seen = new Set()
-  return products.filter((item) => {
-    if (!item.id || seen.has(item.id)) return false
-    seen.add(item.id)
-    return true
-  })
+  return products
+    .filter((item) => item.id && !seen.has(item.id) && seen.add(item.id))
+    .sort((a, b) => {
+      const score = (item) => {
+        const title = item.title.toLowerCase()
+        return terms.reduce((total, term) => total + (title.includes(term) ? 1 : 0), 0)
+      }
+      return score(b) - score(a) || a.title.localeCompare(b.title)
+    })
+}
+
+async function searchWithVariants(query, productFamilyNames, topProducts) {
+  const results = await Promise.allSettled(
+    searchVariants(query).map((variant) => searchCatalog(variant, productFamilyNames, topProducts)),
+  )
+  const successful = results.filter((result) => result.status === 'fulfilled')
+  if (!successful.length) {
+    throw new Error('Search failed for all catalog query variants.')
+  }
+  return rankProducts(successful.flatMap((result) => result.value), query)
+}
+
+export async function searchGames(query) {
+  return searchWithVariants(query, 'Games,DLC,Apps', 20)
+}
+
+export async function searchRelatedDlc(title) {
+  return searchWithVariants(title, 'DLC', 50)
 }
 
 async function fetchProduct(productId, market) {
