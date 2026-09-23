@@ -1,3 +1,4 @@
+/** Place page content in a main landmark with an optional footer. */
 export default function PageLayout({ children, footer }) {
   return (
     <div className="page-layout">

@@ -1,3 +1,4 @@
+/** Wrap content in a card, adding a heading and content styling when a title is provided. */
 export default function Card({ title, children, className = '' }) {
   return (
     <div className={`ui-card ${className}`.trim()}>
